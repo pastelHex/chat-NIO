@@ -17,58 +17,58 @@ import java.util.Vector;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
+import command.chainMaker;
+import command.commandChain;
+
 public class server {
 
-	private static server singleton = null;
 	public HashMap<Integer, String> clientsNames = new HashMap<>();// NO & name?
 	public HashMap<Integer, Integer> clientsPorts = new HashMap<>();// NO & port?
 	public HashMap<SocketChannel, Integer> clientsChannels = new HashMap<>();
-	private static Selector selector;
-	private static InetSocketAddress address;
-	private static HashMap<SocketChannel, String> commands = new HashMap<>();
+	private Selector selector;
+	private InetSocketAddress address;
+	private HashMap<SocketChannel, String> commands = new HashMap<>();
+	private commandChain commandChain;
 
-	public static InetSocketAddress getAddress() {
+	public InetSocketAddress getAddress() {
 		return address;
 	}
 
-	public static void setAddress(InetSocketAddress address) {
-		server.address = address;
+	public void setAddress(InetSocketAddress address) {
+		this.address = address;
 	}
 
-	/*
-	 * public static server getServer() { if (singleton == null) singleton = new
-	 * server(); server.address = new InetSocketAddress("localhost", 20123); return
-	 * singleton; }
-	 */
+	private server() {
+		commandChain = chainMaker.makeServerChainCommand();
+	}
 
 	public static server getServer(int port) {
-		if (singleton == null)
-			singleton = new server();
-		server.address = new InetSocketAddress("localhost", port);
+		server s = new server();
+		s.address = new InetSocketAddress("localhost", port);
 		Thread t = new Thread(new Runnable() {
 			@Override
 			public void run() {
 				try {
-					singleton.startServer();
+					s.startServer();
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
 			}
 		});
 		t.start();
-		return singleton;
+		return s;
 	}
 
 	public void startServer() throws IOException {
-		server.selector = Selector.open();
+		this.selector = Selector.open();
 		ServerSocketChannel serverChannel = ServerSocketChannel.open();
 		serverChannel.configureBlocking(false);
 		serverChannel.socket().bind(address);
 		serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 		System.out.println("Server started...");
 
-		while (true) { 
-			server.selector.select();
+		while (true) {
+			this.selector.select();
 			Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
 			while (keys.hasNext()) {
 				SelectionKey key = keys.next();
@@ -99,35 +99,9 @@ public class server {
 				SocketChannel channel = entry.getKey();
 				String cmd = entry.getValue();
 				it.remove();
-				if (cmd.startsWith("@")) {
-					String[] splitCmd = cmd.split(";");
-					switch (splitCmd[0]) {
-					case "@Set":// register client - @Set;id;name;port
-						System.out.println("set"+splitCmd[3]+splitCmd[2]);
-						int number = Integer.parseInt(splitCmd[1]);
-						int porte = Integer.parseInt(splitCmd[3]);
-						clientsChannels.put(channel, number);
-						clientsNames.put(number, splitCmd[2]);
-						clientsPorts.put(number, porte);
-						write(channel, "@OK;");
-						break;
-					case "@CONTACTS":
-						System.out.println("send clietn");
-						String clientList = "@clients;" + getClients();
-						write(channel, clientList);
-						break;
-					case "@Get":// @Get;id;nazwa;->@Get;id;nazwa;port;
-						System.out.println("get");
-						int id = Integer.parseInt(splitCmd[1]);
-						String nazwa = splitCmd[2];
-						int port = clientsPorts.get(id);
-						write(channel, "@Get;" + id + ";" + nazwa + ";" + port + ";");
-						break;
-					}
 
-				} else {
-					System.out.println("Bad command structure.");
-				}
+				commandChain.interpretCommandForServer(this, channel, cmd);
+
 			}
 		}
 	}
@@ -187,28 +161,13 @@ public class server {
 	}
 
 	public String getClients() {
-		StringBuilder b = new StringBuilder();
-		/*
-		 * singleton.clientsNames.entrySet().stream().forEach(e -> {
-		 * System.out.println(e); b.append(e.getKey() + ":" + e.getValue() + ";"); });
-		 */
-		String s = "";
-		Iterator<Entry<Integer, String>> it = clientsNames.entrySet().iterator();
-		do {
-			Entry<Integer, String> entry = it.next();
-			//System.out.println(entry);
-			//b.append(entry.getKey() + ":" + entry.getValue());
-			s = s + entry.getKey() + ":" + entry.getValue() + ";";
-		} while ((it.hasNext()));
-		//String ugh="";
-	/*	for (Integer key : clientsNames.keySet()) {
-			System.out.println(clientsNames.get(key));
-			ugh = ugh +key + ":" + clientsNames.get(key) + ";";
-		}*/
-		//System.out.println(ugh);
-		System.out.println(s);
-		//System.out.println(b.toString());
-		return s;
+		StringBuilder a = new StringBuilder();
+		this.clientsNames.entrySet().stream().forEach(e -> {
+			String s = e.getKey() + ":" + e.getValue() + ";";
+			a.append(s);
+		});
+		System.out.println(a.toString());
+		return a.toString();
 	}
 
 }

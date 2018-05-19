@@ -11,6 +11,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
 
+import command.chainMaker;
+import command.commandChain;
 import command.commands;
 import controller.*;
 
@@ -32,6 +34,7 @@ public class client {
 	public int currentFriendoID = -1;
 	private StringBuilder myMessagesHistory = new StringBuilder();
 	public clientController controll;
+	private commandChain commandChain;
 
 	public synchronized String getMessagess() {
 		return myMessagesHistory.toString();
@@ -88,6 +91,7 @@ public class client {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		commandChain = chainMaker.makeClientChainCommand();
 		this.setServerPort(serverPort);
 		this.mySocketAddress = new InetSocketAddress("localhost", port);
 		this.myName = name;
@@ -110,15 +114,10 @@ public class client {
 			myServerChannel.socket().bind(new InetSocketAddress("localhost", myPort));
 			myServerChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-			/*
-			 * myChannel = SocketChannel.open(); myChannel.configureBlocking(false);
-			 * myChannel.register(selector, SelectionKey.OP_READ);
-			 * myChannel.connect(mySocketAddress);
-			 */
-
 			registerContact(serverPort, structures.SERVER);
 
 			while (true) {
+				//Thread.sleep(500);
 				// send all ready commends
 				checkRcvMessages();
 				checkCmdToSend();
@@ -145,6 +144,7 @@ public class client {
 						accept(key);
 					}
 				}
+				
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -201,42 +201,9 @@ public class client {
 				String cmd = e.getValue();
 				cmd = cmd.substring(0, cmd.length() - 1);
 				it.remove();
-				if (cmd.startsWith("@")) {
-					String[] splitCmd = cmd.split(";");
-					switch (splitCmd[0]) {
-					case "@OK":// register client - @Set;id;name
-
-						break;
-					case "@clients":
-						System.out.println(cmd + "ooo");
-						for (int i = 1; i < splitCmd.length; i++) {
-							String[] splitClient = splitCmd[i].split(":");
-							try {
-								clientNames.put(Integer.parseInt(splitClient[0]), splitClient[1]);
-							} catch (Exception ex) {
-								System.out.println("bleh");
-							}
-							controll.handlerGotClientList();
-						}
-						break;
-					case "@Get":// @Get;id;nazwa;->@Get;id;nazwa;port;
-						int id = Integer.parseInt(splitCmd[1]);
-						String nazwa = splitCmd[2];
-						int port = Integer.parseInt(splitCmd[3]);
-						// friendSocketAddress = new InetSocketAddress("localhost", port);
-						System.out.println("client:connecting to " + port);
-						registerContact(port, structures.CLIENT);
-						currentFriendoID = id;
-						break;
-					case "@Msg":
-						// TODO HANDLE MESSAGE;
-						this.addMessage(false, splitCmd[1]);
-						controll.handlerGotMsg();
-						break;
-					}
-				} else {
-					System.out.println("Bad command structure.");
-				}
+				
+				commandChain.interpretCommand(this, cmd);
+				
 			}
 		}
 	}
@@ -307,7 +274,7 @@ public class client {
 			cmd = "@GET;" + data[0] + ";" + data[1] + ";";
 			break;
 		case MSG:
-			cmd = "@MSG;" + data[0] + ";";
+			cmd = "@MSG"+this.getID()+";" + data[0] + ";";
 			this.addMessage(true, data[0]);
 			break;
 		case SET:

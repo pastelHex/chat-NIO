@@ -13,6 +13,7 @@ public class commandMSG implements commandChain {
 	public void interpretCommand(client c, String cmd) {
 		String commandEnum = "@" + commands.MSG.toString();
 		if (cmd.startsWith(commandEnum)) {
+			c.currentFriendoID = Integer.parseInt(cmd.substring(4, 5));
 			String[] splitCmd = cmd.split(";");
 			c.addMessage(false, splitCmd[1]);
 			c.controll.handlerGotMsg();
